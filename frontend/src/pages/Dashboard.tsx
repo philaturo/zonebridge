@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Clock,
   UserCheck,
+  Radio,
 } from "lucide-react";
 import type { Activity, Skill, PostMortem } from "../types";
 
