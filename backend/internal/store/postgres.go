@@ -107,79 +107,20 @@ func (s *Store) InitSchema() error {
 	return err
 }
 
-func (s *Store) SeedData() error {
-	// Check if skills exist
-	var count int
-	s.db.QueryRow("SELECT COUNT(*) FROM skills").Scan(&count)
-	if count > 0 {
-		return nil
-	}
-
-	skills := []struct {
-		name, slug, category string
-	}{
-		{"Golang", "golang", "Backend"},
-		{"Algorithms", "algorithms", "Computer Science"},
-		{"Data Structures", "data-structures", "Computer Science"},
-		{"REST API", "rest-api", "Backend"},
-		{"Shell Scripting", "shell-scripting", "DevOps"},
-		{"DevOps", "devops", "Infrastructure"},
-		{"Database Design", "database-design", "Backend"},
-		{"Asynchronous Programming", "async-programming", "Backend"},
-		{"System Architecture", "system-architecture", "Infrastructure"},
-		{"UI/UX", "ui-ux", "Frontend"},
-	}
-
-	for _, s := range skills {
-		_, err := s.db.Exec(
-			"INSERT INTO skills (name, slug, category) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-			s.name, s.slug, s.category,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	projects := []struct {
-		name, slug, module, desc string
-	}{
-		{"ascii-art", "ascii-art", "Go Basics", "Create ASCII art from images"},
-		{"groupie-tracker", "groupie-tracker", "Web", "Band fan site with API integration"},
-		{"lem-in", "lem-in", "Algorithms", "Ant colony pathfinding simulation"},
-		{"piscine-go", "piscine-go", "Go Basics", "Intensive Go programming pool"},
-		{"make-your-game", "make-your-game", "Gaming", "Browser-based game development"},
-		{"dockerize", "dockerize", "DevOps", "Containerize applications"},
-		{"social-network", "social-network", "Web", "Full-stack social platform"},
-		{"math-skills", "math-skills", "Math", "Mathematical computation exercises"},
-		{"net-cat", "net-cat", "Networking", "TCP chat server implementation"},
-		{"kalamazoo", "kalamazoo", "Algorithms", "Advanced sorting and searching"},
-	}
-
-	for _, p := range projects {
-		_, err := s.db.Exec(
-			"INSERT INTO projects (name, slug, module, description) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-			p.name, p.slug, p.module, p.desc,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
+// SeedData REMOVED — no fake data. Real data comes from:
+// 1. Gitea API (projects/repos)
+// 2. Users creating skills organically
 
 // User operations
 func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, error) {
 	var user models.User
 
-	// Try to find existing user
 	err := s.db.QueryRow(
 		"SELECT id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, created_at, updated_at FROM users WHERE gitea_id = $1",
 		giteaUser.ID,
 	).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		// Create new user
 		err = s.db.QueryRow(
 			`INSERT INTO users (gitea_id, username, display_name, email, avatar_url, cohort, role)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -189,7 +130,6 @@ func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, e
 	} else if err != nil {
 		return nil, err
 	} else {
-		// Update existing
 		_, err = s.db.Exec(
 			"UPDATE users SET username = $1, display_name = $2, email = $3, avatar_url = $4, updated_at = NOW() WHERE gitea_id = $5",
 			giteaUser.Login, giteaUser.FullName, giteaUser.Email, giteaUser.AvatarURL, giteaUser.ID,
@@ -222,17 +162,45 @@ func (s *Store) UpdateAvailability(userID uuid.UUID, available bool) error {
 	return err
 }
 
+// === ORGANIC SKILL CREATION ===
+
+func (s *Store) CreateSkillIfNotExists(name, slug, category string) (*models.Skill, error) {
+	var skill models.Skill
+
+	// Try to find existing
+	err := s.db.QueryRow(
+		"SELECT id, name, slug, category, description, created_at FROM skills WHERE slug = $1",
+		slug,
+	).Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
+
+	if err == nil {
+		return &skill, nil // Found existing
+	}
+
+	if err != sql.ErrNoRows {
+		return nil, err // Real error
+	}
+
+	// Create new
+	err = s.db.QueryRow(
+		`INSERT INTO skills (name, slug, category)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, name, slug, category, description, created_at`,
+		name, slug, category,
+	).Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
+
+	return &skill, err
+}
+
 func (s *Store) UpdateUserSkills(userID uuid.UUID, skills []struct {
 	SkillID     string `json:"skill_id"`
 	Proficiency string `json:"proficiency"`
 }) error {
-	// Delete existing
 	_, err := s.db.Exec("DELETE FROM user_skills WHERE user_id = $1", userID)
 	if err != nil {
 		return err
 	}
 
-	// Insert new
 	for _, skill := range skills {
 		skillUUID, err := uuid.Parse(skill.SkillID)
 		if err != nil {
@@ -274,7 +242,8 @@ func (s *Store) GetUserSkills(userID uuid.UUID) ([]models.Skill, error) {
 	return skills, nil
 }
 
-// Skill operations
+// === SKILL OPERATIONS ===
+
 func (s *Store) GetAllSkills() ([]models.Skill, error) {
 	rows, err := s.db.Query("SELECT id, name, slug, category, description, created_at FROM skills ORDER BY category, name")
 	if err != nil {
@@ -284,12 +253,12 @@ func (s *Store) GetAllSkills() ([]models.Skill, error) {
 
 	var skills []models.Skill
 	for rows.Next() {
-		var s models.Skill
-		err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.Category, &s.Description, &s.CreatedAt)
+		var skill models.Skill
+		err := rows.Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		skills = append(skills, s)
+		skills = append(skills, skill)
 	}
 	return skills, nil
 }
@@ -321,7 +290,30 @@ func (s *Store) GetUsersBySkill(slug string) ([]models.User, error) {
 	return users, nil
 }
 
-// Project operations
+// === PROJECT OPERATIONS (from Gitea or edu-01) ===
+
+func (s *Store) CreateOrUpdateProject(name, slug, module, description string) (*models.Project, error) {
+	var project models.Project
+
+	err := s.db.QueryRow(
+		"SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects WHERE slug = $1",
+		slug,
+	).Scan(&project.ID, &project.Edu01ID, &project.Name, &project.Slug, &project.Module, &project.Branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
+
+	if err == sql.ErrNoRows {
+		err = s.db.QueryRow(
+			`INSERT INTO projects (name, slug, module, description)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at`,
+			name, slug, module, description,
+		).Scan(&project.ID, &project.Edu01ID, &project.Name, &project.Slug, &project.Module, &project.Branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &project, nil
+}
+
 func (s *Store) GetAllProjects() ([]models.Project, error) {
 	rows, err := s.db.Query("SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects ORDER BY module, name")
 	if err != nil {
@@ -341,7 +333,8 @@ func (s *Store) GetAllProjects() ([]models.Project, error) {
 	return projects, nil
 }
 
-// PostMortem operations
+// === POST-MORTEM OPERATIONS ===
+
 func (s *Store) CreatePostMortem(pm *models.PostMortem) error {
 	tagsJSON, _ := json.Marshal(pm.Tags)
 	err := s.db.QueryRow(
@@ -402,7 +395,8 @@ func (s *Store) UpvotePostMortem(id uuid.UUID) error {
 	return err
 }
 
-// Activity operations
+// === ACTIVITY OPERATIONS ===
+
 func (s *Store) CreateActivity(activityType string, userID uuid.UUID, payload map[string]interface{}) (*models.Activity, error) {
 	payloadJSON, _ := json.Marshal(payload)
 	var activity models.Activity
