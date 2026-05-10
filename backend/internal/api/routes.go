@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"zonebridge/internal/auth"
 	"zonebridge/internal/config"
 
@@ -9,18 +11,19 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
-	// CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{cfg.FrontendURL},
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080", "https://learn.zone01kisumu.ke"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Location"},
+		AllowCredentials: true, // CRITICAL: allows cookies
+		MaxAge:           12 * time.Hour,
 	}))
 
 	// Public routes
 	r.GET("/auth/gitea", handler.GetAuthURL)
 	r.GET("/auth/callback", handler.AuthCallback)
+	r.POST("/auth/logout", handler.Logout) // NEW
 
 	// WebSocket
 	r.GET("/ws", handler.hub.HandleWebSocket)
@@ -29,26 +32,15 @@ func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
 	api := r.Group("/api")
 	api.Use(auth.Middleware(cfg))
 	{
-		// User
 		api.GET("/me", handler.GetMe)
-
-		// Skills
 		api.GET("/skills", handler.GetSkills)
 		api.GET("/users", handler.GetUsersBySkill)
 		api.PUT("/me/skills", handler.UpdateMySkills)
-
-		// Availability
 		api.PATCH("/me/availability", handler.UpdateAvailability)
-
-		// Projects
 		api.GET("/projects", handler.GetProjects)
-
-		// PostMortems
 		api.GET("/postmortems", handler.GetPostMortems)
 		api.POST("/postmortems", handler.CreatePostMortem)
 		api.POST("/postmortems/:id/upvote", handler.UpvotePostMortem)
-
-		// Activities
 		api.GET("/activities", handler.GetActivities)
 	}
 }
