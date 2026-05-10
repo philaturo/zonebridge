@@ -1,5 +1,5 @@
 import { useAuth } from "../hooks/useAuth";
-import { Zap, Github, ArrowRight } from "lucide-react";
+import { Zap, GitBranch, ArrowRight } from "lucide-react";
 
 export function Login() {
   const { login } = useAuth();
@@ -26,7 +26,7 @@ export function Login() {
             onClick={login}
             className="w-full btn-primary flex items-center justify-center gap-3 py-3 text-lg"
           >
-            <Github className="w-5 h-5" />
+            <GitBranch className="w-5 h-5" />
             Login with Gitea
             <ArrowRight className="w-5 h-5" />
           </button>
