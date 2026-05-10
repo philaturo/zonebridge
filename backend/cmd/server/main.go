@@ -28,9 +28,9 @@ func main() {
 	}
 
 	// Seed data
-	if err := db.SeedData(); err != nil {
-		log.Fatalf("Failed to seed data: %v", err)
-	}
+	// if err := db.SeedData(); err != nil {
+	// 	log.Fatalf("Failed to seed data: %v", err)
+	// }
 
 	// Initialize Gitea client
 	giteaClient := client.NewGiteaClient(cfg)
