@@ -11,7 +11,8 @@ import {
   UserCheck,
   Radio,
 } from "lucide-react";
-import type { Activity, Skill, PostMortem } from "../types";
+//import type { Activity, Skill, PostMortem } from "../types";
+import type { Activity } from "../types";
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -31,21 +32,29 @@ export function Dashboard() {
           getPostMortems(),
         ]);
         setStats({
-          totalSkills: skillsRes.data.length,
-          totalPostMortems: postMortemsRes.data.length,
+          totalSkills: skillsRes.data?.length || 0,
+          totalPostMortems: postMortemsRes.data?.length || 0,
           availableUsers: 0, // Will be calculated from users data
         });
       } catch (err) {
         console.error("Failed to fetch stats:", err);
+
+        setStats({
+          totalSkills: 0,
+          totalPostMortems: 0,
+          availableUsers: 0,
+        });
       }
     };
 
     const fetchActivities = async () => {
       try {
         const res = await getActivities();
-        setRecentActivities(res.data);
+        setRecentActivities(res.data || []);
       } catch (err) {
         console.error("Failed to fetch activities:", err);
+
+        setRecentActivities([]); //set empty on error
       }
     };
 
@@ -53,7 +62,10 @@ export function Dashboard() {
     fetchActivities();
   }, []);
 
-  const allActivities = [...wsActivities, ...recentActivities].slice(0, 20);
+  const allActivities = [
+    ...(wsActivities || []),
+    ...(recentActivities || []),
+  ].slice(0, 20);
 
   const statCards = [
     {
