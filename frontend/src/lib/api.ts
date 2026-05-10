@@ -1,32 +1,25 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
-
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: "",
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // CRITICAL: sends cookies with every request
 });
 
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// NO localStorage token logic needed anymore
 
 // Auth
 export const getAuthURL = () => api.get("/auth/gitea");
 export const getMe = () => api.get("/api/me");
+export const logout = () => api.post("/auth/logout");
 
 // Skills
 export const getSkills = () => api.get("/api/skills");
 export const getUsersBySkill = (slug: string) =>
   api.get("/api/users", { params: { slug } });
-export const updateMySkills = (skills: UserSkill[]) =>
+export const updateMySkills = (skills: any[]) =>
   api.put("/api/me/skills", { skills });
 
 // Availability
@@ -39,7 +32,7 @@ export const getProjects = () => api.get("/api/projects");
 // PostMortems
 export const getPostMortems = (skill?: string) =>
   api.get("/api/postmortems", { params: { skill } });
-export const createPostMortem = (data: Partial<PostMortem>) =>
+export const createPostMortem = (data: any) =>
   api.post("/api/postmortems", data);
 export const upvotePostMortem = (id: string) =>
   api.post(`/api/postmortems/${id}/upvote`);
