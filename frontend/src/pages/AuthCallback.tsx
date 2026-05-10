@@ -1,20 +1,15 @@
 import { useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Zap } from "lucide-react";
 
 export function AuthCallback() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (token) {
-      localStorage.setItem("token", token);
-      navigate("/", { replace: true });
-    } else {
-      navigate("/login", { replace: true });
-    }
-  }, [searchParams, navigate]);
+    // With cookie auth, we just redirect to home.
+    // The cookie was already set by the backend before this page loaded.
+    navigate("/", { replace: true });
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -23,7 +18,7 @@ export function AuthCallback() {
           <Zap className="w-8 h-8 text-primary" />
         </div>
         <h1 className="text-xl font-semibold mb-2">Authenticating...</h1>
-        <p className="text-text-muted">Connecting to Zone01 Gitea</p>
+        <p className="text-text-muted">Setting up your session</p>
       </div>
     </div>
   );
