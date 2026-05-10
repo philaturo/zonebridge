@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	"zonebridge/internal/config"
@@ -48,4 +49,53 @@ func ValidateToken(tokenString string, cfg *config.Config) (*Claims, error) {
 	}
 
 	return nil, fmt.Errorf("invalid token claims")
+}
+
+// SetAuthCookie sets the JWT as an HttpOnly cookie
+func SetAuthCookie(w http.ResponseWriter, token string, cfg *config.Config) {
+	// In development, use Lax + no Secure. In production, use Strict + Secure.
+	sameSite := http.SameSiteLaxMode
+	secure := false
+
+	if cfg.Env == "production" {
+		sameSite = http.SameSiteStrictMode
+		secure = true
+	}
+
+	cookie := &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400, // 24 hours
+		HttpOnly: true,
+		SameSite: sameSite,
+		Secure:   secure,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// ClearAuthCookie clears the auth cookie
+func ClearAuthCookie(w http.ResponseWriter) {
+	cookie := &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// GetTokenFromCookie extracts token from cookie (fallback to header)
+func GetTokenFromCookie(r *http.Request) string {
+	// 1. Check cookie first
+	if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	// 2. Fallback to Authorization header (for WebSocket or API clients)
+	authHeader := r.Header.Get("Authorization")
+	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		return authHeader[7:]
+	}
+	return ""
 }
