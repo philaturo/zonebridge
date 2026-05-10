@@ -317,7 +317,7 @@ func (h *Handler) UpvotePostMortem(c *gin.Context) {
 func (h *Handler) GetActivities(c *gin.Context) {
 	activities, err := h.store.GetRecentActivities(50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get activities"})
+		c.JSON(http.StatusOK, []models.Activity{})
 		return
 	}
 	c.JSON(http.StatusOK, activities)
