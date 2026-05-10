@@ -7,10 +7,9 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const connect = useCallback(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
+    // Use relative URL — browser sends cookies automatically for same-origin WS
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
     ws.onopen = () => {
       setConnected(true);
@@ -25,7 +24,6 @@ export function useWebSocket() {
     ws.onclose = () => {
       setConnected(false);
       console.log("WebSocket disconnected");
-      // Reconnect after 3 seconds
       setTimeout(connect, 3000);
     };
 
