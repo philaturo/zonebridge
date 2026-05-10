@@ -226,16 +226,15 @@ func (s *Store) GetUserSkills(userID uuid.UUID) ([]models.Skill, error) {
 		userID,
 	)
 	if err != nil {
-		return nil, err
+		 return []models.Skill{}, nil
 	}
 	defer rows.Close()
 
-	var skills []models.Skill
+	var skills = []models.Skill{}
 	for rows.Next() {
 		var s models.Skill
-		err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.Category, &s.Description, &s.CreatedAt)
-		if err != nil {
-			return nil, err
+	if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.Category, &s.Description, &s.CreatedAt); err != nil {
+			continue
 		}
 		skills = append(skills, s)
 	}
@@ -247,18 +246,20 @@ func (s *Store) GetUserSkills(userID uuid.UUID) ([]models.Skill, error) {
 func (s *Store) GetAllSkills() ([]models.Skill, error) {
 	rows, err := s.db.Query("SELECT id, name, slug, category, description, created_at FROM skills ORDER BY category, name")
 	if err != nil {
-		return nil, err
+		return []models.Skill{}, nil
 	}
 	defer rows.Close()
 
-	var skills []models.Skill
+	var skills = []models.Skill{} 
 	for rows.Next() {
 		var skill models.Skill
-		err := rows.Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
-		if err != nil {
-			return nil, err
+		if err := rows.Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt); err != nil {
+			continue
 		}
 		skills = append(skills, skill)
+	}
+	if err := rows.Err(); err != nil {
+		return []models.Skill{}, nil
 	}
 	return skills, nil
 }
@@ -278,7 +279,7 @@ func (s *Store) GetUsersBySkill(slug string) ([]models.User, error) {
 	}
 	defer rows.Close()
 
-	var users []models.User
+	var users = []models.User{}
 	for rows.Next() {
 		var u models.User
 		err := rows.Scan(&u.ID, &u.GiteaID, &u.Username, &u.DisplayName, &u.Email, &u.AvatarURL, &u.Cohort, &u.Role, &u.Available, &u.CreatedAt, &u.UpdatedAt)
@@ -317,16 +318,16 @@ func (s *Store) CreateOrUpdateProject(name, slug, module, description string) (*
 func (s *Store) GetAllProjects() ([]models.Project, error) {
 	rows, err := s.db.Query("SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects ORDER BY module, name")
 	if err != nil {
-		return nil, err
+		return []models.Project{}, nil
 	}
 	defer rows.Close()
 
-	var projects []models.Project
+	var projects = []models.Project{} 
 	for rows.Next() {
 		var p models.Project
 		err := rows.Scan(&p.ID, &p.Edu01ID, &p.Name, &p.Slug, &p.Module, &p.Branch, &p.Description, &p.Difficulty, &p.XPReward, &p.Status, &p.CreatedAt)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		projects = append(projects, p)
 	}
@@ -371,7 +372,7 @@ func (s *Store) GetPostMortems(skillSlug string) ([]models.PostMortem, error) {
 	}
 	defer rows.Close()
 
-	var postMortems []models.PostMortem
+	var postMortems = []models.PostMortem{}
 	for rows.Next() {
 		var pm models.PostMortem
 		var tagsJSON []byte
@@ -424,24 +425,26 @@ func (s *Store) GetRecentActivities(limit int) ([]models.Activity, error) {
 		limit,
 	)
 	if err != nil {
-		return nil, err
+		return []models.Activity{}, nil 
 	}
 	defer rows.Close()
 
-	var activities []models.Activity
+	var activities =[]models.Activity{}
 	for rows.Next() {
 		var a models.Activity
 		var payloadJSON []byte
 		var username, displayName, avatarURL string
-		err := rows.Scan(&a.ID, &a.Type, &a.UserID, &payloadJSON, &a.CreatedAt, &username, &displayName, &avatarURL)
-		if err != nil {
-			return nil, err
+			if err := rows.Scan(&a.ID, &a.Type, &a.UserID, &payloadJSON, &a.CreatedAt, &username, &displayName, &avatarURL); err != nil {
+			continue  // ← Skip bad row, don't crash
 		}
 		json.Unmarshal(payloadJSON, &a.Payload)
 		a.Payload["username"] = username
 		a.Payload["display_name"] = displayName
 		a.Payload["avatar_url"] = avatarURL
 		activities = append(activities, a)
+	}
+	if err := rows.Err(); err != nil {
+		return []models.Activity{}, nil
 	}
 	return activities, nil
 }
