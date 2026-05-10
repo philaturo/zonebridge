@@ -6,9 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"zonebridge/internal/auth"
+	"zonebridge/internal/config"
 	"zonebridge/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -24,20 +27,24 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
+	cfg        *config.Config
 }
 
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub      *Hub
+	conn     *websocket.Conn
+	send     chan []byte
+	userID   uuid.UUID
+	username string
 }
 
-func NewHub() *Hub {
+func NewHub(cfg *config.Config) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan *models.Activity),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		cfg:        cfg,
 	}
 }
 
@@ -59,8 +66,8 @@ func (h *Hub) Run() {
 
 		case activity := <-h.broadcast:
 			message, _ := json.Marshal(map[string]interface{}{
-				"type":      activity.Type,
-				"payload":   activity.Payload,
+				"type":       activity.Type,
+				"payload":    activity.Payload,
 				"created_at": activity.CreatedAt,
 			})
 
@@ -83,15 +90,31 @@ func (h *Hub) BroadcastActivity(activity *models.Activity) {
 }
 
 func (h *Hub) HandleWebSocket(c *gin.Context) {
+	// === AUTH: Validate cookie before upgrading to WebSocket ===
+	tokenString := auth.GetTokenFromCookie(c.Request)
+	if tokenString == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authentication"})
+		return
+	}
+
+	claims, err := auth.ValidateToken(tokenString, h.cfg)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+		return
+	}
+	// === END AUTH ===
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
 	}
 
 	client := &Client{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 256),
+		hub:      h,
+		conn:     conn,
+		send:     make(chan []byte, 256),
+		userID:   claims.UserID,
+		username: claims.Username,
 	}
 
 	h.register <- client
