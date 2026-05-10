@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"zonebridge/internal/auth"
@@ -29,51 +30,116 @@ func NewHandler(store *store.Store, giteaClient *client.GiteaClient, hub *Hub, c
 	}
 }
 
-// Auth handlers
+// GetAuthURL redirects to Gitea OAuth
 func (h *Handler) GetAuthURL(c *gin.Context) {
 	url := h.giteaClient.GetOAuthURL(h.cfg.GiteaClientID, h.cfg.GiteaRedirectURI)
-	c.JSON(http.StatusOK, gin.H{"auth_url": url})
+	log.Printf("[OAuth] Redirecting to Gitea: %s", url)
+	c.Redirect(http.StatusTemporaryRedirect, url)
 }
 
+// AuthCallback handles Gitea OAuth callback
 func (h *Handler) AuthCallback(c *gin.Context) {
+	log.Printf("[OAuth] Callback received: %s", c.Request.URL.String())
+
+	// CASE 1: Gitea sent us a JWT token directly (SSO auto-login)
+	token := c.Query("token")
+	if token != "" {
+		log.Printf("[OAuth] Received direct token from Gitea")
+
+		// Validate it's our JWT
+		claims, err := auth.ValidateToken(token, h.cfg)
+		if err == nil {
+			log.Printf("[OAuth] Token valid for user: %s", claims.Username)
+
+			// === FIX: Set HTTP-only cookie and redirect to frontend ===
+			auth.SetAuthCookie(c.Writer, token, h.cfg)
+
+			// Redirect to frontend dashboard (NO token in URL)
+			redirectURL := h.cfg.FrontendURL + "/"
+			log.Printf("[OAuth] Cookie set. Redirecting to: %s", redirectURL)
+			c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+			return
+		}
+
+		log.Printf("[OAuth] Token invalid: %v", err)
+		// Token was invalid, fall through to try standard OAuth flow
+	}
+
+	// CASE 2: Standard OAuth flow with authorization code
 	code := c.Query("code")
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code"})
+		log.Printf("[OAuth] Error: no code or valid token in callback")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "missing authorization code",
+			"url":   c.Request.URL.String(),
+		})
 		return
 	}
 
-	// Exchange code for token
-	accessToken, err := h.giteaClient.ExchangeCodeForToken(code, h.cfg.GiteaClientID, h.cfg.GiteaClientSecret, h.cfg.GiteaRedirectURI)
+	log.Printf("[OAuth] Exchanging code for token...")
+
+	// Exchange code for access token
+	accessToken, err := h.giteaClient.ExchangeCodeForToken(
+		code,
+		h.cfg.GiteaClientID,
+		h.cfg.GiteaClientSecret,
+		h.cfg.GiteaRedirectURI,
+	)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to exchange code", "details": err.Error()})
+		log.Printf("[OAuth] Token exchange failed: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "failed to exchange code",
+			"details": err.Error(),
+		})
 		return
 	}
+
+	log.Printf("[OAuth] Fetching user from Gitea...")
 
 	// Get user from Gitea
 	giteaUser, err := h.giteaClient.GetUser(accessToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to get user", "details": err.Error()})
+		log.Printf("[OAuth] GetUser failed: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "failed to get user",
+			"details": err.Error(),
+		})
 		return
 	}
+
+	log.Printf("[OAuth] User: %s (ID: %d)", giteaUser.Login, giteaUser.ID)
 
 	// Create or update user in DB
 	user, err := h.store.CreateOrUpdateUser(giteaUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save user", "details": err.Error()})
+		log.Printf("[OAuth] DB error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to save user",
+			"details": err.Error(),
+		})
 		return
 	}
 
+	log.Printf("[OAuth] Generating JWT...")
+
 	// Generate JWT
-	token, err := auth.GenerateToken(user.ID, user.Username, h.cfg)
+	jwtToken, err := auth.GenerateToken(user.ID, user.Username, h.cfg)
 	if err != nil {
+		log.Printf("[OAuth] JWT generation failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 
-	// Redirect to frontend with token
-	c.Redirect(http.StatusTemporaryRedirect, h.cfg.FrontendURL+"/auth/callback?token="+token)
+	// === FIX: Set HTTP-only cookie and redirect to frontend ===
+	auth.SetAuthCookie(c.Writer, jwtToken, h.cfg)
+
+	// Redirect to frontend dashboard (NO token in URL)
+	redirectURL := h.cfg.FrontendURL + "/"
+	log.Printf("[OAuth] Cookie set. Redirecting to: %s", redirectURL)
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
+// GetMe returns current authenticated user
 func (h *Handler) GetMe(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	user, err := h.store.GetUserByID(userID)
@@ -82,20 +148,14 @@ func (h *Handler) GetMe(c *gin.Context) {
 		return
 	}
 
-	// Get user skills
 	skills, _ := h.store.GetUserSkills(userID)
-	userWithSkills := struct {
-		*models.User
-		Skills []models.Skill `json:"skills"`
-	}{
-		User:   user,
-		Skills: skills,
-	}
-
-	c.JSON(http.StatusOK, userWithSkills)
+	c.JSON(http.StatusOK, gin.H{
+		"user":   user,
+		"skills": skills,
+	})
 }
 
-// Skill handlers
+// GetSkills returns all skills
 func (h *Handler) GetSkills(c *gin.Context) {
 	skills, err := h.store.GetAllSkills()
 	if err != nil {
@@ -105,6 +165,7 @@ func (h *Handler) GetSkills(c *gin.Context) {
 	c.JSON(http.StatusOK, skills)
 }
 
+// GetUsersBySkill returns users by skill slug
 func (h *Handler) GetUsersBySkill(c *gin.Context) {
 	slug := c.Query("slug")
 	if slug == "" {
@@ -120,6 +181,7 @@ func (h *Handler) GetUsersBySkill(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// UpdateMySkills updates user's skills
 func (h *Handler) UpdateMySkills(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	var req models.UpdateSkillsRequest
@@ -136,7 +198,7 @@ func (h *Handler) UpdateMySkills(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "skills updated"})
 }
 
-// Availability handlers
+// UpdateAvailability toggles user availability
 func (h *Handler) UpdateAvailability(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	var req models.UpdateAvailabilityRequest
@@ -150,10 +212,10 @@ func (h *Handler) UpdateAvailability(c *gin.Context) {
 		return
 	}
 
-	// Create activity and broadcast
+	// Broadcast activity
 	user, _ := h.store.GetUserByID(userID)
 	activity, _ := h.store.CreateActivity("USER_AVAILABLE", userID, map[string]interface{}{
-		"username":    user.Username,
+		"username":     user.Username,
 		"display_name": user.DisplayName,
 		"avatar_url":   user.AvatarURL,
 		"available":    req.Available,
@@ -165,7 +227,7 @@ func (h *Handler) UpdateAvailability(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"available": req.Available})
 }
 
-// Project handlers
+// GetProjects returns all projects
 func (h *Handler) GetProjects(c *gin.Context) {
 	projects, err := h.store.GetAllProjects()
 	if err != nil {
@@ -175,7 +237,7 @@ func (h *Handler) GetProjects(c *gin.Context) {
 	c.JSON(http.StatusOK, projects)
 }
 
-// PostMortem handlers
+// CreatePostMortem creates a new post-mortem
 func (h *Handler) CreatePostMortem(c *gin.Context) {
 	userID := auth.GetUserID(c)
 	var req models.CreatePostMortemRequest
@@ -211,9 +273,9 @@ func (h *Handler) CreatePostMortem(c *gin.Context) {
 	// Broadcast activity
 	user, _ := h.store.GetUserByID(userID)
 	activity, _ := h.store.CreateActivity("NEW_POSTMORTEM", userID, map[string]interface{}{
-		"username":     user.Username,
-		"display_name":  user.DisplayName,
-		"project_name":  req.ProjectName,
+		"username":       user.Username,
+		"display_name":   user.DisplayName,
+		"project_name":   req.ProjectName,
 		"post_mortem_id": pm.ID,
 	})
 	if activity != nil {
@@ -223,6 +285,7 @@ func (h *Handler) CreatePostMortem(c *gin.Context) {
 	c.JSON(http.StatusCreated, pm)
 }
 
+// GetPostMortems returns post-mortems with optional skill filter
 func (h *Handler) GetPostMortems(c *gin.Context) {
 	skillSlug := c.Query("skill")
 	postMortems, err := h.store.GetPostMortems(skillSlug)
@@ -233,6 +296,7 @@ func (h *Handler) GetPostMortems(c *gin.Context) {
 	c.JSON(http.StatusOK, postMortems)
 }
 
+// UpvotePostMortem upvotes a post-mortem
 func (h *Handler) UpvotePostMortem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -249,7 +313,7 @@ func (h *Handler) UpvotePostMortem(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "upvoted"})
 }
 
-// Activity handlers
+// GetActivities returns recent activities
 func (h *Handler) GetActivities(c *gin.Context) {
 	activities, err := h.store.GetRecentActivities(50)
 	if err != nil {
@@ -257,4 +321,10 @@ func (h *Handler) GetActivities(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, activities)
+}
+
+// Logout clears the auth cookie
+func (h *Handler) Logout(c *gin.Context) {
+	auth.ClearAuthCookie(c.Writer)
+	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
