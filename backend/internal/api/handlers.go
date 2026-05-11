@@ -348,6 +348,16 @@ func (h *Handler) GetPostMortems(c *gin.Context) {
 	c.JSON(http.StatusOK, postMortems)
 }
 
+func (h *Handler) GetMyPostMortems(c *gin.Context) {
+    userID := auth.GetUserID(c)
+    postMortems, err := h.store.GetPostMortemsByUser(userID)
+    if err != nil {
+        c.JSON(http.StatusOK, []models.PostMortem{})
+        return
+    }
+    c.JSON(http.StatusOK, postMortems)
+}
+
 // UpvotePostMortem upvotes a post-mortem
 func (h *Handler) UpvotePostMortem(c *gin.Context) {
 	idStr := c.Param("id")
