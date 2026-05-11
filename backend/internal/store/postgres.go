@@ -183,11 +183,11 @@ func (s *Store) CreateSkillIfNotExists(name, slug, category string) (*models.Ski
 
 	// Create new
 	err = s.db.QueryRow(
-		`INSERT INTO skills (name, slug, category)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, name, slug, category, description, created_at`,
-		name, slug, category,
-	).Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
+    `INSERT INTO skills (name, slug, category, description)
+     VALUES ($1, $2, $3, '')
+     RETURNING id, name, slug, category, description, created_at`,
+    name, slug, category,
+).Scan(&skill.ID, &skill.Name, &skill.Slug, &skill.Category, &skill.Description, &skill.CreatedAt)
 
 	return &skill, err
 }
