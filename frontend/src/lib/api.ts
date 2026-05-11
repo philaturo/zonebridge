@@ -21,6 +21,8 @@ export const getUsersBySkill = (slug: string) =>
   api.get("/api/users", { params: { slug } });
 export const updateMySkills = (skills: any[]) =>
   api.put("/api/me/skills", { skills });
+export const createSkill = (data: { name: string; category?: string }) =>
+  api.post("/api/skills", data);
 
 // Availability
 export const updateAvailability = (available: boolean) =>
