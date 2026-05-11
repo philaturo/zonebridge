@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { getSkills, getUsersBySkill } from "../lib/api";
-import { Search, Users, Star, Filter } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { getSkills, getUsersBySkill, createSkill } from "../lib/api";
+import { Search, Users, Star, Filter, Plus, X } from "lucide-react";
 import type { Skill, User } from "../types";
 
 export function Skills() {
@@ -9,30 +9,66 @@ export function Skills() {
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillCategory, setNewSkillCategory] = useState("");
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
-    getSkills().then((res) => setSkills(res.data));
+  const loadSkills = useCallback(() => {
+    getSkills().then((res) => setSkills(res.data || []));
   }, []);
 
   useEffect(() => {
-    if (selectedSkill) {
-      setLoading(true);
-      getUsersBySkill(selectedSkill)
-        .then((res) => setUsers(res.data))
-        .finally(() => setLoading(false));
+    loadSkills();
+  }, [loadSkills]);
+
+  useEffect(() => {
+    if (!selectedSkill) return;
+
+    let mounted = true;
+
+    getUsersBySkill(selectedSkill)
+      .then((res) => {
+        if (mounted) setUsers(res.data || []);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedSkill, setLoading]);
+
+  const handleAddSkill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSkillName.trim()) return;
+
+    setAdding(true);
+    try {
+      await createSkill({ name: newSkillName, category: newSkillCategory });
+      setNewSkillName("");
+      setNewSkillCategory("");
+      setShowAddForm(false);
+      loadSkills();
+    } catch (err) {
+      console.error("Failed to add skill:", err);
+    } finally {
+      setAdding(false);
     }
-  }, [selectedSkill]);
+  };
 
   const filteredSkills = skills.filter(
     (skill) =>
       skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      skill.category.toLowerCase().includes(searchQuery.toLowerCase()),
+      skill.category?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const groupedSkills = filteredSkills.reduce(
     (acc, skill) => {
-      if (!acc[skill.category]) acc[skill.category] = [];
-      acc[skill.category].push(skill);
+      const cat = skill.category || "Uncategorized";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(skill);
       return acc;
     },
     {} as Record<string, Skill[]>,
@@ -40,12 +76,56 @@ export function Skills() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Skill Directory</h1>
-        <p className="text-text-muted">
-          Find apprentices who can help you with specific technologies.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Skill Directory</h1>
+          <p className="text-text-muted">
+            Find apprentices who can help you with specific technologies.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add Skill
+        </button>
       </div>
+
+      {/* Add Skill Form */}
+      {showAddForm && (
+        <div className="card border-primary/30">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Add New Skill</h3>
+            <button
+              onClick={() => setShowAddForm(false)}
+              className="text-text-muted hover:text-text-primary"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <form onSubmit={handleAddSkill} className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Skill name (e.g., Docker, React, Go Channels)"
+              value={newSkillName}
+              onChange={(e) => setNewSkillName(e.target.value)}
+              className="input flex-1"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Category (optional)"
+              value={newSkillCategory}
+              onChange={(e) => setNewSkillCategory(e.target.value)}
+              className="input w-48"
+            />
+            <button type="submit" disabled={adding} className="btn-primary">
+              {adding ? "Adding..." : "Add"}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -62,35 +142,46 @@ export function Skills() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Skills List */}
         <div className="lg:col-span-2 space-y-6">
-          {Object.entries(groupedSkills).map(([category, categorySkills]) => (
-            <div key={category}>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <Filter className="w-4 h-4 text-primary" />
-                {category}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {categorySkills.map((skill) => (
-                  <button
-                    key={skill.id}
-                    onClick={() => setSelectedSkill(skill.slug)}
-                    className={`card card-hover text-left p-4 ${
-                      selectedSkill === skill.slug
-                        ? "border-primary bg-primary/5"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">{skill.name}</h3>
-                      <Star className="w-4 h-4 text-text-muted" />
-                    </div>
-                    <p className="text-sm text-text-muted line-clamp-2">
-                      {skill.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
+          {Object.keys(groupedSkills).length === 0 ? (
+            <div className="card text-center py-12">
+              <p className="text-text-muted mb-2">No skills found.</p>
+              <p className="text-sm text-text-muted">
+                {searchQuery
+                  ? "Try a different search."
+                  : "Be the first to add a skill!"}
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(groupedSkills).map(([category, categorySkills]) => (
+              <div key={category}>
+                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  {category}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {categorySkills.map((skill) => (
+                    <button
+                      key={skill.id}
+                      onClick={() => setSelectedSkill(skill.slug)}
+                      className={`card card-hover text-left p-4 ${
+                        selectedSkill === skill.slug
+                          ? "border-primary bg-primary/5"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold">{skill.name}</h3>
+                        <Star className="w-4 h-4 text-text-muted" />
+                      </div>
+                      <p className="text-sm text-text-muted line-clamp-2">
+                        {skill.description || "No description yet"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Users Panel */}
