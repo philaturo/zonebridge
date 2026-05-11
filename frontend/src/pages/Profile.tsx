@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { getSkills, updateMySkills, updateAvailability } from "../lib/api";
 import {
-  UserCircle,
+  getSkills,
+  updateMySkills,
+  updateAvailability,
+  getMyPostMortems,
+} from "../lib/api";
+import {
   Zap,
   ToggleLeft,
   ToggleRight,
@@ -19,12 +23,20 @@ export function Profile() {
   const [available, setAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [postMortemCount, setPostMortemCount] = useState(0);
 
   const loadSkills = useCallback(() => {
-    getSkills().then((res) => {
-      setSkills(res.data || []);
-      setLoading(false);
-    });
+    getSkills()
+      .then((res) => {
+        setSkills(res.data || []);
+      })
+      .catch((err) => {
+        console.error("Failed to load skills:", err);
+        setSkills([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -37,7 +49,21 @@ export function Profile() {
       setAvailable(user.available);
       setMySkills(user.skills?.map((s) => s.id) || []);
     }
-  }, [user?.id]); // Only when user ID changes
+  }, [user?.id]);
+
+  // Load post-mortem count
+  useEffect(() => {
+    if (!user) return;
+
+    getMyPostMortems()
+      .then((res) => {
+        setPostMortemCount(res.data?.length || 0);
+      })
+      .catch((err) => {
+        console.error("Failed to load post-mortems:", err);
+        setPostMortemCount(0);
+      });
+  }, [user?.id]);
 
   const toggleSkill = (skillId: string) => {
     setMySkills((prev) =>
@@ -53,7 +79,7 @@ export function Profile() {
       await updateMySkills(
         mySkills.map((id) => ({ skill_id: id, proficiency: "intermediate" })),
       );
-      checkAuth(); // Refresh user data
+      checkAuth();
     } catch (err) {
       console.error("Failed to update skills:", err);
     } finally {
@@ -89,24 +115,41 @@ export function Profile() {
     );
   }
 
+  // Safety check - if no user after loading, something went wrong
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-text-muted mb-4">Failed to load profile</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="btn-primary"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl space-y-8">
       {/* Profile Header */}
       <div className="card">
         <div className="flex items-center gap-6">
           <img
-            src={user?.avatar_url}
-            alt={user?.username}
+            src={user.avatar_url}
+            alt={user.username}
             className="w-24 h-24 rounded-full border-2 border-primary"
           />
           <div className="flex-1">
             <h1 className="text-2xl font-bold mb-1">
-              {user?.display_name || user?.username}
+              {user.display_name || user.username}
             </h1>
-            <p className="text-text-muted mb-2">@{user?.username}</p>
+            <p className="text-text-muted mb-2">@{user.username}</p>
             <div className="flex items-center gap-4 text-sm">
-              <span className="badge badge-secondary">{user?.cohort}</span>
-              <span className="text-text-muted">{user?.role}</span>
+              <span className="badge badge-secondary">{user.cohort}</span>
+              <span className="text-text-muted">{user.role}</span>
             </div>
           </div>
           <div className="text-right">
@@ -201,7 +244,9 @@ export function Profile() {
           <p className="text-sm text-text-muted">Available to Help</p>
         </div>
         <div className="card text-center">
-          <p className="text-3xl font-bold text-accent mb-1">0</p>
+          <p className="text-3xl font-bold text-accent mb-1">
+            {postMortemCount}
+          </p>
           <p className="text-sm text-text-muted">Post-Mortems</p>
         </div>
       </div>
