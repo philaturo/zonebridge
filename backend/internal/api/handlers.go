@@ -121,9 +121,12 @@ func (h *Handler) AuthCallback(c *gin.Context) {
 		return
 	}
 
-	// Store Gitea access token for future API calls
+	log.Printf("[OAuth] Storing token for user: %s", user.Username)
+
 if err := h.store.UpdateUserToken(user.ID, accessToken); err != nil {
     log.Printf("[OAuth] Failed to store token: %v", err)
+} else {
+    log.Printf("[OAuth] Token stored successfully")
 }
 
 	log.Printf("[OAuth] Generating JWT...")
@@ -285,29 +288,67 @@ func (h *Handler) UpdateAvailability(c *gin.Context) {
 }
 
 // GetProjects returns all projects
+// func (h *Handler) GetProjects(c *gin.Context) {
+// 	projects, err := h.store.GetAllProjects()
+// 	if err != nil {
+// 		c.JSON(http.StatusOK, []models.Project{})
+// 		return
+// 	}
+
+// 	// Auto-sync from Gitea if empty
+// 	if len(projects) == 0 {
+// 		userID := auth.GetUserID(c)
+// 		token, err := h.store.GetUserToken(userID)
+// 		if err == nil && token != "" {
+// 			repos, err := h.giteaClient.GetUserRepos(token)
+// 			if err == nil {
+// 				for _, repo := range repos {
+// 					// Skip private repos or specific patterns if needed
+// 					h.store.CreateOrUpdateProject(repo.Name, slugify(repo.Name), "Gitea", repo.Description)
+// 				}
+// 				// Re-fetch after sync
+// 				projects, _ = h.store.GetAllProjects()
+// 			} else {
+// 				log.Printf("[Projects] Gitea sync failed: %v", err)
+// 			}
+// 		}
+// 	}
+
+// 	c.JSON(http.StatusOK, projects)
+// }
+
 func (h *Handler) GetProjects(c *gin.Context) {
 	projects, err := h.store.GetAllProjects()
 	if err != nil {
+		log.Printf("[Projects] DB error: %v", err)
 		c.JSON(http.StatusOK, []models.Project{})
 		return
 	}
+	log.Printf("[Projects] DB has %d projects", len(projects))
 
 	// Auto-sync from Gitea if empty
 	if len(projects) == 0 {
+		log.Printf("[Projects] DB empty, attempting Gitea sync...")
 		userID := auth.GetUserID(c)
 		token, err := h.store.GetUserToken(userID)
+		log.Printf("[Projects] Token found: %v, err: %v", token != "", err)
+		
 		if err == nil && token != "" {
 			repos, err := h.giteaClient.GetUserRepos(token)
+			log.Printf("[Projects] Gitea repos: %d, err: %v", len(repos), err)
+			
 			if err == nil {
-				for _, repo := range repos {
-					// Skip private repos or specific patterns if needed
-					h.store.CreateOrUpdateProject(repo.Name, slugify(repo.Name), "Gitea", repo.Description)
-				}
-				// Re-fetch after sync
-				projects, _ = h.store.GetAllProjects()
-			} else {
-				log.Printf("[Projects] Gitea sync failed: %v", err)
-			}
+    for i, repo := range repos {
+        log.Printf("[Projects] Repo %d: %s", i, repo.Name)
+        _, err := h.store.CreateOrUpdateProject(repo.Name, slugify(repo.Name), "Gitea", repo.Description)
+        if err != nil {
+            log.Printf("[Projects] Failed to save repo %s: %v", repo.Name, err)
+        }
+    }
+    // Re-fetch after sync
+    projects, _ = h.store.GetAllProjects()
+    log.Printf("[Projects] After sync: %d projects", len(projects))
+}
 		}
 	}
 
