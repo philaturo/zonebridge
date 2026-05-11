@@ -36,6 +36,7 @@ export const getPostMortems = (skill?: string) =>
   api.get("/api/postmortems", { params: { skill } });
 export const createPostMortem = (data: any) =>
   api.post("/api/postmortems", data);
+export const getMyPostMortems = () => api.get("/api/me/postmortems");
 export const upvotePostMortem = (id: string) =>
   api.post(`/api/postmortems/${id}/upvote`);
 
