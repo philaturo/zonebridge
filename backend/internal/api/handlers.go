@@ -3,6 +3,7 @@ package api
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"zonebridge/internal/auth"
 	"zonebridge/internal/client"
@@ -163,6 +164,57 @@ func (h *Handler) GetSkills(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, skills)
+}
+
+// CreateSkill creates a new skill (organic growth)
+func (h *Handler) CreateSkill(c *gin.Context) {
+	var req struct {
+		Name     string `json:"name" binding:"required"`
+		Category string `json:"category"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+
+	// Auto-generate slug from name
+	slug := slugify(req.Name)
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid skill name"})
+		return
+	}
+
+	skill, err := h.store.CreateSkillIfNotExists(req.Name, slug, req.Category)
+	if err != nil {
+		log.Printf("[Skills] Create error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create skill"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, skill)
+}
+
+// slugify converts a string to URL-friendly slug
+func slugify(s string) string {
+	// Simple slugify: lowercase, replace spaces with hyphens, remove special chars
+	result := ""
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z':
+			result += string(r)
+		case r >= '0' && r <= '9':
+			result += string(r)
+		case r == ' ' || r == '-':
+			if len(result) > 0 && result[len(result)-1] != '-' {
+				result += "-"
+			}
+		}
+	}
+	// Trim trailing hyphen
+	if len(result) > 0 && result[len(result)-1] == '-' {
+		result = result[:len(result)-1]
+	}
+	return result
 }
 
 // GetUsersBySkill returns users by skill slug
