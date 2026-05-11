@@ -391,6 +391,37 @@ func (s *Store) GetPostMortems(skillSlug string) ([]models.PostMortem, error) {
 	return postMortems, nil
 }
 
+func (s *Store) GetPostMortemsByUser(userID uuid.UUID) ([]models.PostMortem, error) {
+    rows, err := s.db.Query(
+        `SELECT id, user_id, project_id, project_name, gitea_repo, challenge, solution, regret, tags, upvotes, created_at, updated_at
+         FROM post_mortems
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        userID,
+    )
+    if err != nil {
+        return []models.PostMortem{}, nil
+    }
+    defer rows.Close()
+
+    var postMortems = []models.PostMortem{}
+    for rows.Next() {
+        var pm models.PostMortem
+        var tagsJSON []byte
+        var projectID sql.NullString
+        if err := rows.Scan(&pm.ID, &pm.UserID, &projectID, &pm.ProjectName, &pm.GiteaRepo, &pm.Challenge, &pm.Solution, &pm.Regret, &tagsJSON, &pm.Upvotes, &pm.CreatedAt, &pm.UpdatedAt); err != nil {
+            continue
+        }
+        if projectID.Valid {
+            pid, _ := uuid.Parse(projectID.String)
+            pm.ProjectID = &pid
+        }
+        json.Unmarshal(tagsJSON, &pm.Tags)
+        postMortems = append(postMortems, pm)
+    }
+    return postMortems, nil
+}
+
 func (s *Store) UpvotePostMortem(id uuid.UUID) error {
 	_, err := s.db.Exec("UPDATE post_mortems SET upvotes = upvotes + 1 WHERE id = $1", id)
 	return err
