@@ -36,11 +36,13 @@ func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
 		api.GET("/skills", handler.GetSkills)
 		api.GET("/users", handler.GetUsersBySkill)
 		api.PUT("/me/skills", handler.UpdateMySkills)
+		api.POST("/skills", handler.CreateSkill) 
 		api.PATCH("/me/availability", handler.UpdateAvailability)
 		api.GET("/projects", handler.GetProjects)
 		api.GET("/postmortems", handler.GetPostMortems)
 		api.POST("/postmortems", handler.CreatePostMortem)
 		api.POST("/postmortems/:id/upvote", handler.UpvotePostMortem)
 		api.GET("/activities", handler.GetActivities)
+
 	}
 }
