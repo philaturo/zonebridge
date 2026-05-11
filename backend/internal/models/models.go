@@ -16,6 +16,7 @@ type User struct {
 	Cohort      string    `json:"cohort" db:"cohort"`
 	Role        string    `json:"role" db:"role"`
 	Available   bool      `json:"available" db:"available"`
+	GiteaAccessToken string    `json:"-" db:"gitea_access_token"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -99,4 +100,14 @@ type UpdateSkillsRequest struct {
 
 type UpdateAvailabilityRequest struct {
 	Available bool `json:"available"`
+}
+
+type GiteaRepo struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	FullName    string `json:"full_name"`
+	Description string `json:"description"`
+	HTMLURL     string `json:"html_url"`
+	Language    string `json:"language"`
+	Private     bool   `json:"private"`
 }
