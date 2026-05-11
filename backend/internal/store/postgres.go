@@ -124,9 +124,9 @@ func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, e
 		err = s.db.QueryRow(
 			`INSERT INTO users (gitea_id, username, display_name, email, avatar_url, cohort, role)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)
-			 RETURNING id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, created_at, updated_at`,
+			 RETURNING id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, gitea_access_token, created_at, updated_at`,
 			giteaUser.ID, giteaUser.Login, giteaUser.FullName, giteaUser.Email, giteaUser.AvatarURL, "zone01-kisumu-c1", "apprentice",
-		).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.CreatedAt, &user.UpdatedAt)
+		).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.GiteaAccessToken, &user.CreatedAt, &user.UpdatedAt)
 	} else if err != nil {
 		return nil, err
 	} else {
@@ -140,6 +140,26 @@ func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, e
 	}
 
 	return &user, nil
+}
+
+func (s *Store) UpdateUserToken(userID uuid.UUID, token string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET gitea_access_token = $1, updated_at = NOW() WHERE id = $2",
+		token, userID,
+	)
+	return err
+}
+
+func (s *Store) GetUserToken(userID uuid.UUID) (string, error) {
+	var token string
+	err := s.db.QueryRow(
+		"SELECT gitea_access_token FROM users WHERE id = $1",
+		userID,
+	).Scan(&token)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return token, err
 }
 
 func (s *Store) GetUserByID(id uuid.UUID) (*models.User, error) {
