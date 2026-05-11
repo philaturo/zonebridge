@@ -41,6 +41,7 @@ func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
 		api.GET("/projects", handler.GetProjects)
 		api.GET("/postmortems", handler.GetPostMortems)
 		api.POST("/postmortems", handler.CreatePostMortem)
+		api.GET("/me/postmortems", handler.GetMyPostMortems)
 		api.POST("/postmortems/:id/upvote", handler.UpvotePostMortem)
 		api.GET("/activities", handler.GetActivities)
 
