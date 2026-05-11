@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   ThumbsUp,
+  Tag,
 } from "lucide-react";
 import type { Project, PostMortem } from "../types";
 
@@ -25,8 +26,8 @@ export function Projects() {
   });
 
   useEffect(() => {
-    getProjects().then((res) => setProjects(res.data));
-    getPostMortems().then((res) => setPostMortems(res.data));
+    getProjects().then((res) => setProjects(res.data || []));
+    getPostMortems().then((res) => setPostMortems(res.data || []));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +44,7 @@ export function Projects() {
         tags: [],
       });
       const res = await getPostMortems();
-      setPostMortems(res.data);
+      setPostMortems(res.data || []);
     } catch (err) {
       console.error("Failed to create post-mortem:", err);
     }
@@ -144,6 +145,32 @@ export function Projects() {
                 className="input w-full h-24 resize-none"
                 placeholder="Any regrets or improvements?"
               />
+            </div>
+            {/* Tag Input - Added Here */}
+            <div>
+              <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-primary" />
+                Tags
+              </label>
+              <input
+                type="text"
+                value={formData.tags.join(", ")}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    tags: e.target.value
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean),
+                  })
+                }
+                className="input w-full"
+                placeholder="docker, golang, websocket, css-grid"
+              />
+              <p className="text-xs text-text-muted mt-1">
+                Comma-separated. These help others discover your insights when
+                searching by skill.
+              </p>
             </div>
             <div className="flex gap-3">
               <button type="submit" className="btn-primary">
