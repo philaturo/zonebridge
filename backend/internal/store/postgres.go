@@ -73,8 +73,8 @@ func (s *Store) InitSchema() error {
 		module VARCHAR(100),
 		branch VARCHAR(100),
 		description TEXT,
-		difficulty INT,
-		xp_reward INT,
+		 difficulty INT DEFAULT 0,
+    xp_reward INT DEFAULT 0,
 		status VARCHAR(50) DEFAULT 'available',
 		created_at TIMESTAMP DEFAULT NOW()
 	);
@@ -115,21 +115,24 @@ func (s *Store) InitSchema() error {
 func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, error) {
 	var user models.User
 
+	// Try to find existing user
 	err := s.db.QueryRow(
-		"SELECT id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, created_at, updated_at FROM users WHERE gitea_id = $1",
+		"SELECT id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, gitea_access_token, created_at, updated_at FROM users WHERE gitea_id = $1",
 		giteaUser.ID,
-	).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.GiteaAccessToken, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
+		// Create new user
 		err = s.db.QueryRow(
-			`INSERT INTO users (gitea_id, username, display_name, email, avatar_url, cohort, role)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO users (gitea_id, username, display_name, email, avatar_url, cohort, role, gitea_access_token)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, '')
 			 RETURNING id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, gitea_access_token, created_at, updated_at`,
 			giteaUser.ID, giteaUser.Login, giteaUser.FullName, giteaUser.Email, giteaUser.AvatarURL, "zone01-kisumu-c1", "apprentice",
 		).Scan(&user.ID, &user.GiteaID, &user.Username, &user.DisplayName, &user.Email, &user.AvatarURL, &user.Cohort, &user.Role, &user.Available, &user.GiteaAccessToken, &user.CreatedAt, &user.UpdatedAt)
 	} else if err != nil {
 		return nil, err
 	} else {
+		// Update existing
 		_, err = s.db.Exec(
 			"UPDATE users SET username = $1, display_name = $2, email = $3, avatar_url = $4, updated_at = NOW() WHERE gitea_id = $5",
 			giteaUser.Login, giteaUser.FullName, giteaUser.Email, giteaUser.AvatarURL, giteaUser.ID,
@@ -151,7 +154,7 @@ func (s *Store) UpdateUserToken(userID uuid.UUID, token string) error {
 }
 
 func (s *Store) GetUserToken(userID uuid.UUID) (string, error) {
-	var token string
+	var token sql.NullString
 	err := s.db.QueryRow(
 		"SELECT gitea_access_token FROM users WHERE id = $1",
 		userID,
@@ -159,7 +162,13 @@ func (s *Store) GetUserToken(userID uuid.UUID) (string, error) {
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
-	return token, err
+	if err != nil {
+		return "", err
+	}
+	if !token.Valid {
+		return "", nil
+	}
+	return token.String, nil
 }
 
 func (s *Store) GetUserByID(id uuid.UUID) (*models.User, error) {
@@ -314,44 +323,64 @@ func (s *Store) GetUsersBySkill(slug string) ([]models.User, error) {
 // === PROJECT OPERATIONS (from Gitea or edu-01) ===
 
 func (s *Store) CreateOrUpdateProject(name, slug, module, description string) (*models.Project, error) {
-	var project models.Project
+    var project models.Project
 
-	err := s.db.QueryRow(
-		"SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects WHERE slug = $1",
-		slug,
-	).Scan(&project.ID, &project.Edu01ID, &project.Name, &project.Slug, &project.Module, &project.Branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
+    // Use sql.NullString for nullable columns
+    var edu01ID sql.NullString
+    var branch sql.NullString
 
-	if err == sql.ErrNoRows {
-		err = s.db.QueryRow(
-			`INSERT INTO projects (name, slug, module, description)
-			 VALUES ($1, $2, $3, $4)
-			 RETURNING id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at`,
-			name, slug, module, description,
-		).Scan(&project.ID, &project.Edu01ID, &project.Name, &project.Slug, &project.Module, &project.Branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
-	} else if err != nil {
-		return nil, err
-	}
+    err := s.db.QueryRow(
+        "SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects WHERE slug = $1",
+        slug,
+    ).Scan(&project.ID, &edu01ID, &project.Name, &project.Slug, &project.Module, &branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
 
-	return &project, nil
+    if err == sql.ErrNoRows {
+        err = s.db.QueryRow(
+            `INSERT INTO projects (name, slug, module, description, difficulty, xp_reward)
+             VALUES ($1, $2, $3, $4, 0, 0)
+             RETURNING id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at`,
+            name, slug, module, description,
+        ).Scan(&project.ID, &edu01ID, &project.Name, &project.Slug, &project.Module, &branch, &project.Description, &project.Difficulty, &project.XPReward, &project.Status, &project.CreatedAt)
+    } else if err != nil {
+        return nil, err
+    }
+
+    // Convert sql.NullString to string
+    if edu01ID.Valid {
+        project.Edu01ID = edu01ID.String
+    }
+    if branch.Valid {
+        project.Branch = branch.String
+    }
+
+    return &project, nil
 }
 
 func (s *Store) GetAllProjects() ([]models.Project, error) {
-	rows, err := s.db.Query("SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects ORDER BY module, name")
-	if err != nil {
-		return []models.Project{}, nil
-	}
-	defer rows.Close()
+    rows, err := s.db.Query("SELECT id, edu01_id, name, slug, module, branch, description, difficulty, xp_reward, status, created_at FROM projects ORDER BY module, name")
+    if err != nil {
+        return []models.Project{}, nil
+    }
+    defer rows.Close()
 
-	var projects = []models.Project{} 
-	for rows.Next() {
-		var p models.Project
-		err := rows.Scan(&p.ID, &p.Edu01ID, &p.Name, &p.Slug, &p.Module, &p.Branch, &p.Description, &p.Difficulty, &p.XPReward, &p.Status, &p.CreatedAt)
-		if err != nil {
-			continue
-		}
-		projects = append(projects, p)
-	}
-	return projects, nil
+    var projects = []models.Project{} 
+    for rows.Next() {
+        var p models.Project
+        var edu01ID sql.NullString
+        var branch sql.NullString
+        err := rows.Scan(&p.ID, &edu01ID, &p.Name, &p.Slug, &p.Module, &branch, &p.Description, &p.Difficulty, &p.XPReward, &p.Status, &p.CreatedAt)
+        if err != nil {
+            continue
+        }
+        if edu01ID.Valid {
+            p.Edu01ID = edu01ID.String
+        }
+        if branch.Valid {
+            p.Branch = branch.String
+        }
+        projects = append(projects, p)
+    }
+    return projects, nil
 }
 
 // === POST-MORTEM OPERATIONS ===
