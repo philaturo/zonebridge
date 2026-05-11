@@ -25,7 +25,13 @@ export function useAuth() {
   const checkAuth = useCallback(async () => {
     try {
       const response = await getMe();
-      setUser(response.data);
+      // Backend returns {user: {...}, skills: [...]}
+      const data = response.data;
+      const userWithSkills: User = {
+        ...data.user,
+        skills: data.skills || [],
+      };
+      setUser(userWithSkills);
       setError(null);
     } catch (err: any) {
       console.error("Auth check failed:", err.message);
