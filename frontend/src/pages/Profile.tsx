@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getSkills, updateMySkills, updateAvailability } from "../lib/api";
 import {
@@ -8,6 +8,7 @@ import {
   ToggleRight,
   Star,
   Save,
+  Loader2,
 } from "lucide-react";
 import type { Skill } from "../types";
 
@@ -15,19 +16,28 @@ export function Profile() {
   const { user, checkAuth } = useAuth();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [mySkills, setMySkills] = useState<string[]>([]);
-  const [available, setAvailable] = useState(user?.available || false);
+  const [available, setAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getSkills().then((res) => setSkills(res.data));
+  const loadSkills = useCallback(() => {
+    getSkills().then((res) => {
+      setSkills(res.data || []);
+      setLoading(false);
+    });
   }, []);
 
+  useEffect(() => {
+    loadSkills();
+  }, [loadSkills]);
+
+  // Initialize from user data
   useEffect(() => {
     if (user) {
       setAvailable(user.available);
       setMySkills(user.skills?.map((s) => s.id) || []);
     }
-  }, [user]);
+  }, [user?.id]); // Only when user ID changes
 
   const toggleSkill = (skillId: string) => {
     setMySkills((prev) =>
@@ -43,7 +53,7 @@ export function Profile() {
       await updateMySkills(
         mySkills.map((id) => ({ skill_id: id, proficiency: "intermediate" })),
       );
-      checkAuth();
+      checkAuth(); // Refresh user data
     } catch (err) {
       console.error("Failed to update skills:", err);
     } finally {
@@ -63,12 +73,21 @@ export function Profile() {
 
   const groupedSkills = skills.reduce(
     (acc, skill) => {
-      if (!acc[skill.category]) acc[skill.category] = [];
-      acc[skill.category].push(skill);
+      const cat = skill.category || "Uncategorized";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(skill);
       return acc;
     },
     {} as Record<string, Skill[]>,
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl space-y-8">
@@ -128,34 +147,43 @@ export function Profile() {
           </button>
         </div>
 
-        <div className="space-y-6">
-          {Object.entries(groupedSkills).map(([category, categorySkills]) => (
-            <div key={category}>
-              <h3 className="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">
-                {category}
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {categorySkills.map((skill) => {
-                  const isSelected = mySkills.includes(skill.id);
-                  return (
-                    <button
-                      key={skill.id}
-                      onClick={() => toggleSkill(skill.id)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-                        isSelected
-                          ? "bg-primary text-background font-medium"
-                          : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
-                      }`}
-                    >
-                      {isSelected && <Star className="w-3 h-3" />}
-                      {skill.name}
-                    </button>
-                  );
-                })}
+        {Object.keys(groupedSkills).length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-text-muted">No skills available yet.</p>
+            <p className="text-sm text-text-muted mt-1">
+              Add skills from the Skills page first!
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(groupedSkills).map(([category, categorySkills]) => (
+              <div key={category}>
+                <h3 className="text-sm font-medium text-text-muted mb-3 uppercase tracking-wider">
+                  {category}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {categorySkills.map((skill) => {
+                    const isSelected = mySkills.includes(skill.id);
+                    return (
+                      <button
+                        key={skill.id}
+                        onClick={() => toggleSkill(skill.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+                          isSelected
+                            ? "bg-primary text-background font-medium"
+                            : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
+                        }`}
+                      >
+                        {isSelected && <Star className="w-3 h-3" />}
+                        {skill.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -168,7 +196,7 @@ export function Profile() {
         </div>
         <div className="card text-center">
           <p className="text-3xl font-bold text-secondary mb-1">
-            {user?.available ? "Yes" : "No"}
+            {available ? "Yes" : "No"}
           </p>
           <p className="text-sm text-text-muted">Available to Help</p>
         </div>
