@@ -44,6 +44,16 @@ func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
 		api.GET("/me/postmortems", handler.GetMyPostMortems)
 		api.POST("/postmortems/:id/upvote", handler.UpvotePostMortem)
 		api.GET("/activities", handler.GetActivities)
+		api.GET("/users/all", handler.GetAllUsers)
+		api.GET("/users/online", handler.GetAvailableUsers)
+		api.GET("/postmortems/:id/comments", handler.GetComments)
+		api.POST("/postmortems/:id/comments", handler.CreateComment)
+
+			// Help Requests
+		api.GET("/help-requests", handler.GetHelpRequests)
+		api.POST("/help-requests", handler.CreateHelpRequest)
+		api.PATCH("/help-requests/:id/accept", handler.AcceptHelpRequest)
+		api.PATCH("/help-requests/:id/resolve", handler.ResolveHelpRequest)
 
 	}
 }
