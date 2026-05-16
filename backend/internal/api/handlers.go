@@ -456,3 +456,117 @@ func (h *Handler) Logout(c *gin.Context) {
 	auth.ClearAuthCookie(c.Writer)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
+
+// === USER OPERATIONS ===
+
+func (h *Handler) GetAllUsers(c *gin.Context) {
+	users, err := h.store.GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+func (h *Handler) GetAvailableUsers(c *gin.Context) {
+	users, err := h.store.GetAvailableUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+// === COMMENT OPERATIONS ===
+
+func (h *Handler) GetComments(c *gin.Context) {
+	postMortemID := c.Param("id")
+	comments, err := h.store.GetCommentsByPostMortem(postMortemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": comments})
+}
+
+func (h *Handler) CreateComment(c *gin.Context) {
+	userID := auth.GetUserID(c)
+	postMortemID := c.Param("id")
+
+	var req models.CreateCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	comment, err := h.store.CreateComment(postMortemID, userID, req.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": comment})
+}
+
+// === HELP REQUEST OPERATIONS ===
+
+func (h *Handler) GetHelpRequests(c *gin.Context) {
+	status := c.Query("status")
+	requests, err := h.store.GetHelpRequests(status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": requests})
+}
+
+func (h *Handler) CreateHelpRequest(c *gin.Context) {
+	userID := auth.GetUserID(c)
+
+	var req models.CreateHelpRequestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hr, err := h.store.CreateHelpRequest(userID, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Broadcast activity
+	user, _ := h.store.GetUserByID(userID)
+	activity, _ := h.store.CreateActivity("HELP_REQUEST", userID, map[string]interface{}{
+		"requester_name": user.DisplayName,
+		"skill_name":     req.SkillName,
+		"title":          req.Title,
+	})
+	if activity != nil {
+		h.hub.BroadcastActivity(activity)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"data": hr})
+}
+
+func (h *Handler) AcceptHelpRequest(c *gin.Context) {
+	userID := auth.GetUserID(c)
+	id := c.Param("id")
+
+	hr, err := h.store.AcceptHelpRequest(id, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": hr})
+}
+
+func (h *Handler) ResolveHelpRequest(c *gin.Context) {
+	id := c.Param("id")
+
+	hr, err := h.store.ResolveHelpRequest(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": hr})
+}
