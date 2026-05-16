@@ -9,6 +9,7 @@ import (
 	"zonebridge/internal/auth"
 	"zonebridge/internal/config"
 	"zonebridge/internal/models"
+	"zonebridge/internal/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -28,6 +29,7 @@ type Hub struct {
 	unregister chan *Client
 	mu         sync.RWMutex
 	cfg        *config.Config
+	store      *store.Store
 }
 
 type Client struct {
@@ -38,13 +40,15 @@ type Client struct {
 	username string
 }
 
-func NewHub(cfg *config.Config) *Hub {
+// UPDATED: accepts store parameter
+func NewHub(cfg *config.Config, store *store.Store) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan *models.Activity),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		cfg:        cfg,
+		store:      store,
 	}
 }
 
@@ -55,6 +59,8 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
+			// ADDED: broadcast presence on connect
+			h.broadcastPresence("USER_ONLINE", client.userID)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -63,6 +69,8 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 			h.mu.Unlock()
+			// ADDED: broadcast presence on disconnect
+			h.broadcastPresence("USER_OFFLINE", client.userID)
 
 		case activity := <-h.broadcast:
 			message, _ := json.Marshal(map[string]interface{}{
@@ -85,8 +93,55 @@ func (h *Hub) Run() {
 	}
 }
 
+// ADDED: broadcasts presence events with full user profile
+func (h *Hub) broadcastPresence(eventType string, userID uuid.UUID) {
+	// Fetch full user data from database
+	user, err := h.store.GetUserByID(userID)
+	if err != nil {
+		// Fallback to minimal data if DB error
+		payload := map[string]interface{}{
+			"user_id":  userID.String(),
+			"username": "unknown",
+		}
+		activity := &models.Activity{
+			ID:      uuid.New(),
+			Type:    eventType,
+			UserID:  userID,
+			Payload: payload,
+		}
+		h.broadcast <- activity
+		return
+	}
+
+	payload := map[string]interface{}{
+		"user_id":      userID.String(),
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+		"avatar_url":   user.AvatarURL,
+		"cohort":       user.Cohort,
+		"available":    user.Available,
+	}
+	activity := &models.Activity{
+		ID:      uuid.New(),
+		Type:    eventType,
+		UserID:  userID,
+		Payload: payload,
+	}
+	h.broadcast <- activity
+}
+
 func (h *Hub) BroadcastActivity(activity *models.Activity) {
 	h.broadcast <- activity
+}
+
+func (h *Hub) GetOnlineUsers() []uuid.UUID {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	users := make([]uuid.UUID, 0, len(h.clients))
+	for client := range h.clients {
+		users = append(users, client.userID)
+	}
+	return users
 }
 
 func (h *Hub) HandleWebSocket(c *gin.Context) {
