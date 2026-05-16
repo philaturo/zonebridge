@@ -1,50 +1,84 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { getMe, logout as apiLogout } from "../lib/api";
 import type { User } from "../types";
 
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// Singleton state outside React
+let globalUser: User | null = null;
+let globalLoading = true;
+const globalListeners: Set<(user: User | null, loading: boolean) => void> =
+  new Set();
 
-  const login = useCallback(() => {
-    // Direct redirect to backend OAuth endpoint (no localStorage clearing needed)
-    window.location.href = "/auth/gitea";
+function notifyListeners() {
+  globalListeners.forEach((cb) => cb(globalUser, globalLoading));
+}
+
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(globalUser);
+  const [loading, setLoading] = useState(globalLoading);
+  const [error, setError] = useState<string | null>(null);
+  const checkedRef = useRef(false);
+
+  useEffect(() => {
+    const listener = (u: User | null, l: boolean) => {
+      setUser(u);
+      setLoading(l);
+    };
+    globalListeners.add(listener);
+
+    // Only run auth check once globally
+    if (!checkedRef.current && globalLoading) {
+      checkedRef.current = true;
+      getMe()
+        .then((res) => {
+          const data = res.data;
+          globalUser = { ...data.user, skills: data.skills || [] };
+          globalLoading = false;
+          notifyListeners();
+        })
+        .catch(() => {
+          globalUser = null;
+          globalLoading = false;
+          notifyListeners();
+        });
+    }
+
+    return () => {
+      globalListeners.delete(listener);
+    };
   }, []);
 
-  const logout = useCallback(async () => {
+  const login = () => {
+    window.location.href = "/auth/gitea";
+  };
+
+  const logout = async () => {
     try {
       await apiLogout();
     } catch (e) {
       console.error("Logout error:", e);
     }
-    setUser(null);
+    globalUser = null;
+    notifyListeners();
     window.location.href = "/login";
-  }, []);
+  };
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = async () => {
+    globalLoading = true;
+    notifyListeners();
     try {
       const response = await getMe();
-      // Backend returns {user: {...}, skills: [...]}
       const data = response.data;
-      const userWithSkills: User = {
-        ...data.user,
-        skills: data.skills || [],
-      };
-      setUser(userWithSkills);
+      globalUser = { ...data.user, skills: data.skills || [] };
       setError(null);
     } catch (err: any) {
       console.error("Auth check failed:", err.message);
       setError("Session expired");
-      setUser(null);
+      globalUser = null;
     } finally {
-      setLoading(false);
+      globalLoading = false;
+      notifyListeners();
     }
-  }, []);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+  };
 
   return { user, loading, error, login, logout, checkAuth };
 }
