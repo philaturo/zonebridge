@@ -111,3 +111,46 @@ type GiteaRepo struct {
 	Language    string `json:"language"`
 	Private     bool   `json:"private"`
 }
+
+type Comment struct {
+	ID           uuid.UUID `json:"id" db:"id"`
+	PostMortemID uuid.UUID `json:"post_mortem_id" db:"post_mortem_id"`
+	UserID       uuid.UUID `json:"user_id" db:"user_id"`
+	Username     string    `json:"username" db:"username"`
+	DisplayName  string    `json:"display_name" db:"display_name"`
+	AvatarURL    string    `json:"avatar_url" db:"avatar_url"`
+	Content      string    `json:"content" db:"content"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type CreateCommentRequest struct {
+	Content string `json:"content" binding:"required"`
+}
+
+type HelpRequest struct {
+	ID                 uuid.UUID `json:"id" db:"id"`
+	RequesterID        uuid.UUID `json:"requester_id" db:"requester_id"`
+	RequesterName      string    `json:"requester_name" db:"requester_name"`
+	RequesterAvatarURL string    `json:"requester_avatar_url" db:"requester_avatar_url"`
+	SkillID            uuid.UUID `json:"skill_id" db:"skill_id"`
+	SkillName          string    `json:"skill_name" db:"skill_name"`
+	ProjectID          string    `json:"project_id" db:"project_id"`
+	ProjectName        string    `json:"project_name" db:"project_name"`
+	Title              string    `json:"title" db:"title"`
+	Description        string    `json:"description" db:"description"`
+	Status             string    `json:"status" db:"status"`
+	HelperID           string    `json:"helper_id" db:"helper_id"`
+	HelperName         string    `json:"helper_name" db:"helper_name"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	ResolvedAt         string    `json:"resolved_at" db:"resolved_at"`
+}
+
+type CreateHelpRequestRequest struct {
+	SkillID     string `json:"skill_id" binding:"required"`
+	SkillName   string `json:"skill_name" binding:"required"`
+	ProjectID   string `json:"project_id"`
+	ProjectName string `json:"project_name"`
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description" binding:"required"`
+}
