@@ -56,9 +56,44 @@ export interface PostMortem {
   updated_at: string;
 }
 
+export interface Comment {
+  id: string;
+  post_mortem_id: string;
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HelpRequest {
+  id: string;
+  requester_id: string;
+  requester_name: string;
+  requester_avatar_url?: string;
+  skill_id: string;
+  skill_name: string;
+  project_id: string | null;
+  project_name: string | null;
+  title: string;
+  description: string;
+  status: "open" | "accepted" | "resolved";
+  helper_id: string | null;
+  helper_name: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface Activity {
   id: string;
-  type: "USER_AVAILABLE" | "NEW_POSTMORTEM" | "HELP_REQUEST";
+  type:
+    | "USER_AVAILABLE"
+    | "NEW_POSTMORTEM"
+    | "HELP_REQUEST"
+    | "USER_ONLINE"
+    | "USER_OFFLINE";
   user_id: string;
   payload: Record<string, any>;
   created_at: string;
