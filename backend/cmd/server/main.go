@@ -36,7 +36,7 @@ func main() {
 	giteaClient := client.NewGiteaClient(cfg)
 
 	// Initialize WebSocket hub
-	hub := api.NewHub(cfg)
+	hub := api.NewHub(cfg, db)
 	go hub.Run()
 
 	// Initialize handler
