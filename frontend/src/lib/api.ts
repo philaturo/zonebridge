@@ -5,10 +5,8 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true, // CRITICAL: sends cookies with every request
+  withCredentials: true,
 });
-
-// NO localStorage token logic needed anymore
 
 // Auth
 export const getAuthURL = () => api.get("/auth/gitea");
@@ -39,6 +37,34 @@ export const createPostMortem = (data: any) =>
 export const getMyPostMortems = () => api.get("/api/me/postmortems");
 export const upvotePostMortem = (id: string) =>
   api.post(`/api/postmortems/${id}/upvote`);
+
+// Comments
+export const getComments = (postMortemId: string) =>
+  api.get(`/api/postmortems/${postMortemId}/comments`);
+export const createComment = (
+  postMortemId: string,
+  data: { content: string },
+) => api.post(`/api/postmortems/${postMortemId}/comments`, data);
+
+// Help Requests
+export const getHelpRequests = (status?: string) =>
+  api.get("/api/help-requests", { params: status ? { status } : undefined });
+export const createHelpRequest = (data: {
+  skill_id: string;
+  skill_name: string;
+  project_id?: string;
+  project_name?: string;
+  title: string;
+  description: string;
+}) => api.post("/api/help-requests", data);
+export const acceptHelpRequest = (id: string) =>
+  api.patch(`/api/help-requests/${id}/accept`);
+export const resolveHelpRequest = (id: string) =>
+  api.patch(`/api/help-requests/${id}/resolve`);
+
+// Users
+export const getAllUsers = () => api.get("/api/users");
+export const getAvailableUsers = () => api.get("/api/users/online");
 
 // Activities
 export const getActivities = () => api.get("/api/activities");
