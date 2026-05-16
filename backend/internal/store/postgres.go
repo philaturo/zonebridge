@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"zonebridge/internal/models"
 
@@ -100,6 +101,30 @@ func (s *Store) InitSchema() error {
 		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
 		payload JSONB DEFAULT '{}',
 		created_at TIMESTAMP DEFAULT NOW()
+	);
+
+		CREATE TABLE IF NOT EXISTS comments (
+		id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+		post_mortem_id UUID REFERENCES post_mortems(id) ON DELETE CASCADE,
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		content TEXT NOT NULL,
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);
+
+	CREATE TABLE IF NOT EXISTS help_requests (
+		id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+		requester_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		skill_id UUID REFERENCES skills(id) ON DELETE SET NULL,
+		skill_name VARCHAR(255) NOT NULL,
+		project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+		project_name VARCHAR(255),
+		title VARCHAR(255) NOT NULL,
+		description TEXT NOT NULL,
+		status VARCHAR(50) DEFAULT 'open',
+		helper_id UUID REFERENCES users(id) ON DELETE SET NULL,
+		created_at TIMESTAMP DEFAULT NOW(),
+		resolved_at TIMESTAMP
 	);
 	`
 
@@ -527,4 +552,229 @@ func (s *Store) GetRecentActivities(limit int) ([]models.Activity, error) {
 		return []models.Activity{}, nil
 	}
 	return activities, nil
+}
+// === USER LIST OPERATIONS ===
+
+func (s *Store) GetAllUsers() ([]models.User, error) {
+	rows, err := s.db.Query(
+		"SELECT id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, created_at, updated_at FROM users ORDER BY username",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users = []models.User{}
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.GiteaID, &u.Username, &u.DisplayName, &u.Email, &u.AvatarURL, &u.Cohort, &u.Role, &u.Available, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func (s *Store) GetAvailableUsers() ([]models.User, error) {
+	rows, err := s.db.Query(
+		"SELECT id, gitea_id, username, display_name, email, avatar_url, cohort, role, available, created_at, updated_at FROM users WHERE available = true ORDER BY username",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users = []models.User{}
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.GiteaID, &u.Username, &u.DisplayName, &u.Email, &u.AvatarURL, &u.Cohort, &u.Role, &u.Available, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// === COMMENT OPERATIONS ===
+
+func (s *Store) GetCommentsByPostMortem(postMortemID string) ([]models.Comment, error) {
+	rows, err := s.db.Query(
+		`SELECT c.id, c.post_mortem_id, c.user_id, u.username, u.display_name, u.avatar_url, c.content, c.created_at, c.updated_at
+		 FROM comments c
+		 JOIN users u ON c.user_id = u.id
+		 WHERE c.post_mortem_id = $1
+		 ORDER BY c.created_at ASC`,
+		postMortemID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments = []models.Comment{}
+	for rows.Next() {
+		var c models.Comment
+		if err := rows.Scan(&c.ID, &c.PostMortemID, &c.UserID, &c.Username, &c.DisplayName, &c.AvatarURL, &c.Content, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			continue
+		}
+		comments = append(comments, c)
+	}
+	return comments, nil
+}
+
+func (s *Store) CreateComment(postMortemID string, userID uuid.UUID, content string) (*models.Comment, error) {
+	var comment models.Comment
+	err := s.db.QueryRow(
+		`INSERT INTO comments (post_mortem_id, user_id, content)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, post_mortem_id, user_id, content, created_at, updated_at`,
+		postMortemID, userID, content,
+	).Scan(&comment.ID, &comment.PostMortemID, &comment.UserID, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &comment, nil
+}
+
+// === HELP REQUEST OPERATIONS ===
+
+func (s *Store) GetHelpRequests(status string) ([]models.HelpRequest, error) {
+	var rows *sql.Rows
+	var err error
+
+	if status != "" {
+		rows, err = s.db.Query(
+			`SELECT h.id, h.requester_id, u.username as requester_name, u.avatar_url as requester_avatar_url,
+			        h.skill_id, h.skill_name, h.project_id, h.project_name, h.title, h.description,
+			        h.status, h.helper_id, uh.username as helper_name, h.created_at, h.resolved_at
+			 FROM help_requests h
+			 JOIN users u ON h.requester_id = u.id
+			 LEFT JOIN users uh ON h.helper_id = uh.id
+			 WHERE h.status = $1
+			 ORDER BY h.created_at DESC`,
+			status,
+		)
+	} else {
+		rows, err = s.db.Query(
+			`SELECT h.id, h.requester_id, u.username as requester_name, u.avatar_url as requester_avatar_url,
+			        h.skill_id, h.skill_name, h.project_id, h.project_name, h.title, h.description,
+			        h.status, h.helper_id, uh.username as helper_name, h.created_at, h.resolved_at
+			 FROM help_requests h
+			 JOIN users u ON h.requester_id = u.id
+			 LEFT JOIN users uh ON h.helper_id = uh.id
+			 ORDER BY h.created_at DESC`,
+		)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var requests = []models.HelpRequest{}
+	for rows.Next() {
+		var hr models.HelpRequest
+		var projectID, projectName, helperID, helperName sql.NullString
+		var resolvedAt sql.NullTime
+		if err := rows.Scan(&hr.ID, &hr.RequesterID, &hr.RequesterName, &hr.RequesterAvatarURL, &hr.SkillID, &hr.SkillName, &projectID, &projectName, &hr.Title, &hr.Description, &hr.Status, &helperID, &helperName, &hr.CreatedAt, &resolvedAt); err != nil {
+			continue
+		}
+		if projectID.Valid {
+			hr.ProjectID = projectID.String
+		}
+		if projectName.Valid {
+			hr.ProjectName = projectName.String
+		}
+		if helperID.Valid {
+			hr.HelperID = helperID.String
+		}
+		if helperName.Valid {
+			hr.HelperName = helperName.String
+		}
+		if resolvedAt.Valid {
+			hr.ResolvedAt = resolvedAt.Time.Format(time.RFC3339)
+		}
+		requests = append(requests, hr)
+	}
+	return requests, nil
+}
+
+func (s *Store) CreateHelpRequest(userID uuid.UUID, req *models.CreateHelpRequestRequest) (*models.HelpRequest, error) {
+	var hr models.HelpRequest
+	var projectID interface{}
+	if req.ProjectID != "" {
+		projectID = req.ProjectID
+	} else {
+		projectID = nil
+	}
+
+	err := s.db.QueryRow(
+		`INSERT INTO help_requests (requester_id, skill_id, skill_name, project_id, project_name, title, description)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 RETURNING id, requester_id, skill_id, skill_name, project_id, project_name, title, description, status, helper_id, created_at`,
+		userID, req.SkillID, req.SkillName, projectID, req.ProjectName, req.Title, req.Description,
+	).Scan(&hr.ID, &hr.RequesterID, &hr.SkillID, &hr.SkillName, &projectID, &hr.ProjectName, &hr.Title, &hr.Description, &hr.Status, &hr.HelperID, &hr.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &hr, nil
+}
+
+func (s *Store) AcceptHelpRequest(id string, helperID uuid.UUID) (*models.HelpRequest, error) {
+	_, err := s.db.Exec(
+		"UPDATE help_requests SET status = 'accepted', helper_id = $1 WHERE id = $2",
+		helperID, id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.getHelpRequestByID(id)
+}
+
+func (s *Store) ResolveHelpRequest(id string) (*models.HelpRequest, error) {
+	_, err := s.db.Exec(
+		"UPDATE help_requests SET status = 'resolved', resolved_at = NOW() WHERE id = $1",
+		id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.getHelpRequestByID(id)
+}
+
+func (s *Store) getHelpRequestByID(id string) (*models.HelpRequest, error) {
+	var hr models.HelpRequest
+	var projectID, projectName, helperID, helperName sql.NullString
+	var resolvedAt sql.NullTime
+
+	err := s.db.QueryRow(
+		`SELECT h.id, h.requester_id, u.username as requester_name, u.avatar_url as requester_avatar_url,
+		        h.skill_id, h.skill_name, h.project_id, h.project_name, h.title, h.description,
+		        h.status, h.helper_id, uh.username as helper_name, h.created_at, h.resolved_at
+		 FROM help_requests h
+		 JOIN users u ON h.requester_id = u.id
+		 LEFT JOIN users uh ON h.helper_id = uh.id
+		 WHERE h.id = $1`,
+		id,
+	).Scan(&hr.ID, &hr.RequesterID, &hr.RequesterName, &hr.RequesterAvatarURL, &hr.SkillID, &hr.SkillName, &projectID, &projectName, &hr.Title, &hr.Description, &hr.Status, &helperID, &helperName, &hr.CreatedAt, &resolvedAt)
+
+	if err != nil {
+		return nil, err
+	}
+	if projectID.Valid {
+		hr.ProjectID = projectID.String
+	}
+	if projectName.Valid {
+		hr.ProjectName = projectName.String
+	}
+	if helperID.Valid {
+		hr.HelperID = helperID.String
+	}
+	if helperName.Valid {
+		hr.HelperName = helperName.String
+	}
+	if resolvedAt.Valid {
+		hr.ResolvedAt = resolvedAt.Time.Format(time.RFC3339)
+	}
+	return &hr, nil
 }
