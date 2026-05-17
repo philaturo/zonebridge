@@ -17,7 +17,7 @@ import {
   Filter,
   Plus,
   X,
-  Zap,
+  // Zap,
   ArrowRight,
   MessageCircle,
   Sparkles,
