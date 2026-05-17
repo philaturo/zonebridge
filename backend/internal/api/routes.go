@@ -12,7 +12,8 @@ import (
 
 func SetupRoutes(r *gin.Engine, handler *Handler, cfg *config.Config) {
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080", "https://learn.zone01kisumu.ke"},
+		// AllowOrigins:     []string{"http://localhost:5173", "http://localhost:8080", "https://learn.zone01kisumu.ke"},
+		AllowOrigins: []string{cfg.FrontendURL, "http://localhost:5173", "http://localhost:8080"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Location"},
