@@ -12,6 +12,16 @@ function notifyListeners() {
   globalListeners.forEach((cb) => cb(globalUser, globalLoading));
 }
 
+// Helper to get API base URL
+function getApiBase(): string {
+  return (
+    import.meta.env.VITE_API_URL ||
+    (window.location.hostname.includes("railway.app")
+      ? "https://zonebridge-production.up.railway.app"
+      : "http://localhost:8080")
+  );
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(globalUser);
   const [loading, setLoading] = useState(globalLoading);
@@ -48,7 +58,7 @@ export function useAuth() {
   }, []);
 
   const login = () => {
-    window.location.href = "/auth/gitea";
+    window.location.href = `${getApiBase()}/auth/gitea`;
   };
 
   const logout = async () => {
