@@ -11,7 +11,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { SkeletonCard } from "../components/ui/Skeleton";
 import { CommentThread } from "../components/ui/CommentThread";
 import {
-  FolderGit,
+  // FolderGit,
   BookOpen,
   Plus,
   ChevronDown,
