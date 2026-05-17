@@ -287,36 +287,6 @@ func (h *Handler) UpdateAvailability(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"available": req.Available})
 }
 
-// GetProjects returns all projects
-// func (h *Handler) GetProjects(c *gin.Context) {
-// 	projects, err := h.store.GetAllProjects()
-// 	if err != nil {
-// 		c.JSON(http.StatusOK, []models.Project{})
-// 		return
-// 	}
-
-// 	// Auto-sync from Gitea if empty
-// 	if len(projects) == 0 {
-// 		userID := auth.GetUserID(c)
-// 		token, err := h.store.GetUserToken(userID)
-// 		if err == nil && token != "" {
-// 			repos, err := h.giteaClient.GetUserRepos(token)
-// 			if err == nil {
-// 				for _, repo := range repos {
-// 					// Skip private repos or specific patterns if needed
-// 					h.store.CreateOrUpdateProject(repo.Name, slugify(repo.Name), "Gitea", repo.Description)
-// 				}
-// 				// Re-fetch after sync
-// 				projects, _ = h.store.GetAllProjects()
-// 			} else {
-// 				log.Printf("[Projects] Gitea sync failed: %v", err)
-// 			}
-// 		}
-// 	}
-
-// 	c.JSON(http.StatusOK, projects)
-// }
-
 func (h *Handler) GetProjects(c *gin.Context) {
 	projects, err := h.store.GetAllProjects()
 	if err != nil {
