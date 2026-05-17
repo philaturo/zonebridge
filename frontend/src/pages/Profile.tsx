@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "../components/ui/Toast";
-import { SkeletonCard } from "../components/ui/Skeleton";
+// import { SkeletonCard } from "../components/ui/Skeleton";
 import {
   getSkills,
   updateMySkills,
