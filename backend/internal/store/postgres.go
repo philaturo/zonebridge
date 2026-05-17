@@ -132,10 +132,6 @@ func (s *Store) InitSchema() error {
 	return err
 }
 
-// SeedData REMOVED — no fake data. Real data comes from:
-// 1. Gitea API (projects/repos)
-// 2. Users creating skills organically
-
 // User operations
 func (s *Store) CreateOrUpdateUser(giteaUser *models.GiteaUser) (*models.User, error) {
 	var user models.User
