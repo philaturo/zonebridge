@@ -46,6 +46,7 @@ func (s *Store) InitSchema() error {
 		cohort VARCHAR(100),
 		role VARCHAR(50) DEFAULT 'apprentice',
 		available BOOLEAN DEFAULT false,
+		gitea_access_token TEXT DEFAULT '',
 		created_at TIMESTAMP DEFAULT NOW(),
 		updated_at TIMESTAMP DEFAULT NOW()
 	);
