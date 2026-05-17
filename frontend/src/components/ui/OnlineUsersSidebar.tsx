@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useOnlineUsers } from "../../hooks/useWebSocket";
 import { useAuth } from "../../hooks/useAuth";
 import { Users, Radio, UserCheck, MessageCircle, Search } from "lucide-react";
-import type { User } from "../../types";
+// import type { User } from "../../types";
 
 interface OnlineUsersSidebarProps {
   className?: string;
