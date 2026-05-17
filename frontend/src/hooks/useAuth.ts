@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getMe, logout as apiLogout } from "../lib/api";
 import type { User } from "../types";
 
