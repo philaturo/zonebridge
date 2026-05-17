@@ -14,8 +14,9 @@ function ensureConnection() {
     return;
   }
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
+  const wsUrl = API_URL.replace(/^http/, "ws") + "/ws";
+  const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
     globalConnected = true;
