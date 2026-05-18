@@ -53,7 +53,6 @@ func ValidateToken(tokenString string, cfg *config.Config) (*Claims, error) {
 
 // SetAuthCookie sets the JWT as an HttpOnly cookie
 func SetAuthCookie(w http.ResponseWriter, token string, cfg *config.Config) {
-	// In development, use Lax + no Secure. In production, use Strict + Secure.
 	sameSite := http.SameSiteLaxMode
 	secure := false
 	domain := ""
@@ -61,16 +60,15 @@ func SetAuthCookie(w http.ResponseWriter, token string, cfg *config.Config) {
 	if cfg.Env == "production" {
 		sameSite = http.SameSiteNoneMode
 		secure = true
-
-		domain = ".up.railway.app" 
+		domain = ".up.railway.app"
 	}
 
 	cookie := &http.Cookie{
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
-		Domain:   domain, 
-		MaxAge:   86400, // 24 hours
+		Domain:   domain,
+		MaxAge:   86400,
 		HttpOnly: true,
 		SameSite: sameSite,
 		Secure:   secure,
