@@ -56,16 +56,20 @@ func SetAuthCookie(w http.ResponseWriter, token string, cfg *config.Config) {
 	// In development, use Lax + no Secure. In production, use Strict + Secure.
 	sameSite := http.SameSiteLaxMode
 	secure := false
+	domain := ""
 
 	if cfg.Env == "production" {
-		sameSite = http.SameSiteStrictMode
+		sameSite = http.SameSiteNoneMode
 		secure = true
+
+		domain = ".up.railway.app" 
 	}
 
 	cookie := &http.Cookie{
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
+		Domain:   domain, 
 		MaxAge:   86400, // 24 hours
 		HttpOnly: true,
 		SameSite: sameSite,
@@ -80,8 +84,11 @@ func ClearAuthCookie(w http.ResponseWriter) {
 		Name:     "auth_token",
 		Value:    "",
 		Path:     "/",
+		Domain:   ".up.railway.app",
 		MaxAge:   -1,
 		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
+		Secure:   true,
 	}
 	http.SetCookie(w, cookie)
 }
