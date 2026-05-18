@@ -14,8 +14,7 @@ function ensureConnection() {
     return;
   }
 
-  const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
-  const wsUrl = API_URL.replace(/^http/, "ws") + "/ws";
+  const wsUrl = window.location.origin.replace(/^http/, "ws") + "/ws";
   const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
