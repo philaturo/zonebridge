@@ -5,7 +5,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN rm -f .env
+RUN rm -f .env .env.local .env.production .env.* 
 
 
 ARG VITE_API_URL
