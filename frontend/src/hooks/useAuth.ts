@@ -48,8 +48,7 @@ export function useAuth() {
   }, []);
 
   const login = () => {
-    const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
-    window.location.href = `${apiBase}/auth/gitea`;
+    window.location.href = "/auth/gitea"; // ← Relative URL
   };
 
   const logout = async () => {
