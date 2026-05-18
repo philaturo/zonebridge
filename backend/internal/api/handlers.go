@@ -58,7 +58,8 @@ func (h *Handler) AuthCallback(c *gin.Context) {
 			// Redirect to frontend dashboard (NO token in URL)
 			redirectURL := h.cfg.FrontendURL + "/"
 			log.Printf("[OAuth] Cookie set. Redirecting to: %s", redirectURL)
-			c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+			c.Writer.Header().Set("Location", redirectURL)
+			c.Writer.WriteHeader(http.StatusFound)
 			return
 		}
 
@@ -123,11 +124,11 @@ func (h *Handler) AuthCallback(c *gin.Context) {
 
 	log.Printf("[OAuth] Storing token for user: %s", user.Username)
 
-if err := h.store.UpdateUserToken(user.ID, accessToken); err != nil {
-    log.Printf("[OAuth] Failed to store token: %v", err)
-} else {
-    log.Printf("[OAuth] Token stored successfully")
-}
+	if err := h.store.UpdateUserToken(user.ID, accessToken); err != nil {
+		log.Printf("[OAuth] Failed to store token: %v", err)
+	} else {
+		log.Printf("[OAuth] Token stored successfully")
+	}
 
 	log.Printf("[OAuth] Generating JWT...")
 
@@ -145,7 +146,8 @@ if err := h.store.UpdateUserToken(user.ID, accessToken); err != nil {
 	// Redirect to frontend dashboard (NO token in URL)
 	redirectURL := h.cfg.FrontendURL + "/"
 	log.Printf("[OAuth] Cookie set. Redirecting to: %s", redirectURL)
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Writer.Header().Set("Location", redirectURL)
+	c.Writer.WriteHeader(http.StatusFound)
 }
 
 // GetMe returns current authenticated user
