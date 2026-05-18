@@ -58,7 +58,8 @@ export function useAuth() {
   }, []);
 
   const login = () => {
-    window.location.href = `${getApiBase()}/auth/gitea`;
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8080";
+    window.location.href = `${apiBase}/auth/gitea`;
   };
 
   const logout = async () => {
