@@ -97,33 +97,6 @@ func (c *GiteaClient) GetUser(accessToken string) (*models.GiteaUser, error) {
 	return &user, nil
 }
 
-// GetUserRepos fetches all repositories for the authenticated user
-// func (c *GiteaClient) GetUserRepos(accessToken string) ([]models.GiteaRepo, error) {
-// 	allRepos := make(map[int64]models.GiteaRepo) // Use map to deduplicate
-	
-// 	// Fetch all three types
-// 	types := []string{"", "collaborative", "organization"}
-	
-// 	for _, t := range types {
-// 		repos, err := c.fetchReposByType(accessToken, t)
-// 		if err != nil {
-// 			log.Printf("[Gitea] Failed to fetch type=%s: %v", t, err)
-// 			continue
-// 		}
-// 		for _, r := range repos {
-// 			allRepos[r.ID] = r // Deduplicate by ID
-// 		}
-// 	}
-	
-// 	// Convert map to slice
-// 	result := make([]models.GiteaRepo, 0, len(allRepos))
-// 	for _, r := range allRepos {
-// 		result = append(result, r)
-// 	}
-	
-// 	return result, nil
-// }
-
 func (c *GiteaClient) GetUserRepos(accessToken string) ([]models.GiteaRepo, error) {
 	allRepos := make(map[int64]models.GiteaRepo)
 	types := []string{"", "collaborative", "organization"}
